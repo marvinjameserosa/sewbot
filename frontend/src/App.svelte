@@ -60,7 +60,7 @@
     });
 
     socket.on("terminal_output", (data) => {
-      terminalHistory = [...terminalHistory, { type: "output", content: data.output }];
+      terminalHistory = [...terminalHistory, { type: "output", content: data.output, id: Date.now() + Math.random() }];
       setTimeout(() => {
         if (terminalOutput) {
           terminalOutput.scrollTop = terminalOutput.scrollHeight;
@@ -96,7 +96,7 @@
     if (!terminalInput.trim()) return;
     
     const cmd = terminalInput.trim();
-    terminalHistory = [...terminalHistory, { type: "command", content: cmd }];
+    terminalHistory = [...terminalHistory, { type: "command", content: cmd, id: Date.now() + Math.random() }];
     socket.emit("ssh_command", { command: cmd });
     addLog(`Executed: ${cmd}`, "info");
     terminalInput = "";
@@ -362,7 +362,7 @@
               <span>Enter commands to execute on the robot</span>
             </div>
           {:else}
-            {#each terminalHistory as entry}
+            {#each terminalHistory as entry (entry.id)}
               <div class="terminal-line {entry.type}">
                 {#if entry.type === "command"}
                   <span class="prompt">$</span>
@@ -388,6 +388,7 @@
             class="send-btn" 
             onclick={executeCommand}
             disabled={status !== "Online" || !terminalInput.trim()}
+            aria-label="Send command"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
