@@ -20,6 +20,7 @@
   let activeDirection = $state(null);
   let logsContainer = $state(null);
   let terminalOutput = $state(null);
+  let isFullscreen = $state(false);
 
   const feedUrl = $derived(`${backendOrigin}/video_feed?ts=${feedNonce}`);
 
@@ -27,12 +28,10 @@
     const timestamp = new Date().toLocaleTimeString("en-US", { 
       hour12: false,
       hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
+      minute: "2-digit"
     });
     logs = [...logs.slice(-99), { timestamp, message, type, id: Date.now() }];
     
-    // Auto-scroll logs
     setTimeout(() => {
       if (logsContainer) {
         logsContainer.scrollTop = logsContainer.scrollHeight;
@@ -43,7 +42,7 @@
   onMount(() => {
     socket.on("connect", () => {
       status = "Online";
-      addLog("Connected to backend", "success");
+      addLog("Connected to sewbot backend", "success");
     });
 
     socket.on("disconnect", () => {
@@ -99,7 +98,7 @@
     const cmd = terminalInput.trim();
     terminalHistory = [...terminalHistory, { type: "command", content: cmd }];
     socket.emit("ssh_command", { command: cmd });
-    addLog(`SSH: ${cmd}`, "info");
+    addLog(`Executed: ${cmd}`, "info");
     terminalInput = "";
     
     setTimeout(() => {
@@ -124,7 +123,6 @@
     addLog("Logs cleared", "info");
   };
 
-  // Keyboard Listeners for movement
   const handleGlobalKeydown = (e) => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     const key = e.key.toLowerCase();
@@ -141,6 +139,10 @@
       sendMove("stop");
     }
   };
+
+  const toggleFullscreen = () => {
+    isFullscreen = !isFullscreen;
+  };
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} onkeyup={handleGlobalKeyup} />
@@ -148,243 +150,282 @@
 <main class="app">
   <!-- Header -->
   <header class="header">
-    <div class="header-brand">
+    <div class="header-left">
       <h1 class="logo">sewbot</h1>
-      <div class="status-badge" class:online={status === "Online"}>
-        <span class="status-dot"></span>
+      <span class="divider"></span>
+      <span class="subtitle">controller</span>
+    </div>
+    <div class="header-right">
+      <div class="connection-pill" class:online={status === "Online"}>
+        <span class="connection-dot"></span>
         <span>{status}</span>
       </div>
     </div>
-    <div class="header-meta">
-      <span class="meta-label">Backend</span>
-      <code class="meta-value">{backendOrigin}</code>
-    </div>
   </header>
 
-  <!-- Main Content -->
-  <div class="layout">
-    <!-- Left Column - Camera + Controls -->
-    <div class="column-main">
-      <!-- Camera Feed -->
-      <section class="card camera-card">
-        <div class="card-header">
-          <div class="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>
-            </svg>
-            Camera Feed
-          </div>
-          <div class="card-actions">
-            <span class="live-badge">
-              <span class="live-dot"></span>
-              LIVE
-            </span>
-            <button class="btn-icon" onclick={reloadFeed} title="Refresh">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
-                <path d="M21 3v5h-5"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div class="camera-feed">
+  <!-- Main Layout -->
+  <div class="main-layout">
+    <!-- Video Player Section -->
+    <div class="video-section">
+      <div class="video-player" class:fullscreen={isFullscreen}>
+        <div class="video-container">
           {#if feedError}
-            <div class="feed-placeholder">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>
-                <line x1="2" y1="2" x2="22" y2="22"/>
-              </svg>
-              <span>Camera unavailable</span>
-              <button class="btn-secondary" onclick={reloadFeed}>Retry Connection</button>
+            <div class="video-offline">
+              <div class="offline-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="2" y="6" width="14" height="12" rx="2"/>
+                  <path d="m22 8-6 4 6 4V8Z"/>
+                  <line x1="1" y1="1" x2="23" y2="23" stroke-width="2"/>
+                </svg>
+              </div>
+              <p class="offline-text">Camera feed unavailable</p>
+              <button class="retry-btn" onclick={reloadFeed}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                </svg>
+                Retry
+              </button>
             </div>
           {:else}
             <img
               src={feedUrl}
-              class="feed-img"
+              class="video-feed"
               alt="Robot camera feed"
               onerror={() => (feedError = "Feed unavailable")}
               onload={() => (feedError = "")}
             />
           {/if}
         </div>
-      </section>
-
-      <!-- Controls -->
-      <section class="card controls-card">
-        <div class="card-header">
-          <div class="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><path d="m8 12 4 4 4-4"/><path d="M12 8v8"/>
-            </svg>
-            Controls
+        
+        <!-- Video Controls Bar -->
+        <div class="video-controls">
+          <div class="controls-left">
+            <div class="live-indicator">
+              <span class="live-dot"></span>
+              <span>LIVE</span>
+            </div>
           </div>
-          <span class="hint">Use WASD keys or buttons</span>
+          <div class="controls-right">
+            <button class="video-btn" onclick={reloadFeed} title="Refresh feed">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+              </svg>
+            </button>
+            <button class="video-btn" onclick={toggleFullscreen} title="Fullscreen">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                {#if isFullscreen}
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+                {:else}
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                {/if}
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="controls-content">
+      </div>
+
+      <!-- Controls Panel -->
+      <div class="controls-panel">
+        <div class="dpad-section">
+          <p class="section-label">Movement Controls</p>
           <div class="dpad">
             <button 
-              class="dpad-btn up" 
+              class="dpad-key up" 
               class:active={activeDirection === "w"}
               onmousedown={() => sendMove("w")}
               onmouseup={() => sendMove("stop")}
               onmouseleave={() => activeDirection === "w" && sendMove("stop")}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <span class="key-letter">W</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="m18 15-6-6-6 6"/>
               </svg>
-              <span class="key">W</span>
             </button>
             <button 
-              class="dpad-btn left"
+              class="dpad-key left"
               class:active={activeDirection === "a"}
               onmousedown={() => sendMove("a")}
               onmouseup={() => sendMove("stop")}
               onmouseleave={() => activeDirection === "a" && sendMove("stop")}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <span class="key-letter">A</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="m15 18-6-6 6-6"/>
               </svg>
-              <span class="key">A</span>
             </button>
+            <div class="dpad-center-wrapper">
+              <button 
+                class="stop-btn"
+                onclick={() => sendMove("stop")}
+                title="Emergency Stop"
+              >
+                STOP
+              </button>
+            </div>
             <button 
-              class="dpad-btn down"
-              class:active={activeDirection === "s"}
-              onmousedown={() => sendMove("s")}
-              onmouseup={() => sendMove("stop")}
-              onmouseleave={() => activeDirection === "s" && sendMove("stop")}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m6 9 6 6 6-6"/>
-              </svg>
-              <span class="key">S</span>
-            </button>
-            <button 
-              class="dpad-btn right"
+              class="dpad-key right"
               class:active={activeDirection === "d"}
               onmousedown={() => sendMove("d")}
               onmouseup={() => sendMove("stop")}
               onmouseleave={() => activeDirection === "d" && sendMove("stop")}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <span class="key-letter">D</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="m9 18 6-6-6-6"/>
               </svg>
-              <span class="key">D</span>
             </button>
-            <div class="dpad-center"></div>
+            <button 
+              class="dpad-key down"
+              class:active={activeDirection === "s"}
+              onmousedown={() => sendMove("s")}
+              onmouseup={() => sendMove("stop")}
+              onmouseleave={() => activeDirection === "s" && sendMove("stop")}
+            >
+              <span class="key-letter">S</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
           </div>
-          <button class="btn-danger" onclick={() => sendMove("stop")}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/>
-            </svg>
-            Emergency Stop
-          </button>
+          <p class="hint-text">Use WASD keys or click buttons</p>
         </div>
-      </section>
+      </div>
     </div>
 
-    <!-- Right Column - Logs + Terminal -->
-    <div class="column-side">
-      <!-- Logs -->
-      <section class="card logs-card">
-        <div class="card-header">
-          <div class="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 12h.01"/><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M22 13a18.15 18.15 0 0 1-20 0"/><rect width="20" height="14" x="2" y="6" rx="2"/>
-            </svg>
-            System Logs
-          </div>
-          <div class="card-actions">
-            <span class="log-count">{logs.length}</span>
-            <button class="btn-icon" onclick={clearLogs} title="Clear logs">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Chat/Logs Sidebar -->
+    <div class="sidebar">
+      <!-- Logs as Live Chat -->
+      <div class="chat-section">
+        <div class="chat-header">
+          <span class="chat-title">Live Activity</span>
+          <div class="chat-actions">
+            <span class="viewer-count">{logs.length} events</span>
+            <button class="icon-btn" onclick={clearLogs} title="Clear">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
               </svg>
             </button>
           </div>
         </div>
-        <div class="logs-feed" bind:this={logsContainer}>
+        <div class="chat-messages" bind:this={logsContainer}>
           {#if logs.length === 0}
-            <div class="empty-state">
-              <span>No logs yet</span>
+            <div class="chat-empty">
+              <p>No activity yet</p>
+              <span>Events will appear here</span>
             </div>
           {:else}
             {#each logs as log (log.id)}
-              <div class="log-entry {log.type}">
-                <span class="log-time">{log.timestamp}</span>
-                <span class="log-type-badge">{log.type}</span>
-                <span class="log-msg">{log.message}</span>
+              <div class="chat-message {log.type}">
+                <span class="msg-badge {log.type}">
+                  {#if log.type === "success"}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+                  {:else if log.type === "error"}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+                  {:else}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                  {/if}
+                </span>
+                <span class="msg-content">{log.message}</span>
+                <span class="msg-time">{log.timestamp}</span>
               </div>
             {/each}
           {/if}
         </div>
-      </section>
+      </div>
 
-      <!-- Terminal -->
-      <section class="card terminal-card">
-        <div class="card-header">
-          <div class="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Terminal as Command Input -->
+      <div class="terminal-section">
+        <div class="terminal-header">
+          <div class="terminal-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>
             </svg>
-            SSH Terminal
+            <span>SSH Terminal</span>
           </div>
-          <div class="card-actions">
+          <div class="terminal-actions">
             <span class="terminal-status" class:connected={status === "Online"}>
-              {status === "Online" ? "Connected" : "Disconnected"}
+              {status === "Online" ? "connected" : "disconnected"}
             </span>
-            <button class="btn-icon" onclick={clearTerminal} title="Clear terminal">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="icon-btn" onclick={clearTerminal} title="Clear">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
               </svg>
             </button>
           </div>
         </div>
-        <div class="terminal">
-          <div class="terminal-output" bind:this={terminalOutput}>
-            {#if terminalHistory.length === 0}
-              <div class="terminal-welcome">
-                <span class="welcome-title">SSH Terminal Ready</span>
-                <span class="welcome-hint">Enter commands to execute on the robot</span>
-              </div>
-            {:else}
-              {#each terminalHistory as entry}
+        <div class="terminal-body" bind:this={terminalOutput}>
+          {#if terminalHistory.length === 0}
+            <div class="terminal-welcome">
+              <p>Welcome to SSH Terminal</p>
+              <span>Enter commands to execute on the robot</span>
+            </div>
+          {:else}
+            {#each terminalHistory as entry}
+              <div class="terminal-line {entry.type}">
                 {#if entry.type === "command"}
-                  <div class="term-line cmd">
-                    <span class="prompt">$</span>
-                    <span>{entry.content}</span>
-                  </div>
+                  <span class="prompt">$</span>
+                  <span class="cmd-text">{entry.content}</span>
                 {:else}
-                  <div class="term-line out">{entry.content}</div>
+                  <span class="output-text">{entry.content}</span>
                 {/if}
-              {/each}
-            {/if}
-          </div>
-          <div class="terminal-input-wrapper">
-            <span class="prompt">$</span>
-            <input 
-              type="text" 
-              class="terminal-input" 
-              placeholder={status === "Online" ? "Enter command..." : "Waiting for connection..."}
-              bind:value={terminalInput}
-              onkeydown={handleKeydown}
-              disabled={status !== "Online"}
-            />
-          </div>
+              </div>
+            {/each}
+          {/if}
         </div>
-      </section>
+        <div class="terminal-input-area">
+          <span class="input-prompt">$</span>
+          <input 
+            type="text" 
+            class="cmd-input" 
+            placeholder={status === "Online" ? "Type a command..." : "Waiting for connection..."}
+            bind:value={terminalInput}
+            onkeydown={handleKeydown}
+            disabled={status !== "Online"}
+          />
+          <button 
+            class="send-btn" 
+            onclick={executeCommand}
+            disabled={status !== "Online" || !terminalInput.trim()}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </main>
 
 <style>
+  :root {
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #111111;
+    --bg-tertiary: #181818;
+    --bg-hover: #1f1f1f;
+    --border: #262626;
+    --border-light: #333333;
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --accent: #10b981;
+    --accent-muted: rgba(16, 185, 129, 0.15);
+    --danger: #ef4444;
+    --danger-muted: rgba(239, 68, 68, 0.15);
+    --info: #3b82f6;
+    --info-muted: rgba(59, 130, 246, 0.15);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
   .app {
     min-height: 100vh;
-    padding: 20px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    max-width: 1600px;
-    margin: 0 auto;
   }
 
   /* Header */
@@ -392,541 +433,647 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
   }
 
-  .header-brand {
+  .header-left {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
   }
 
   .logo {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
   }
 
-  .status-badge {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 500;
-    background: var(--danger-muted);
-    color: var(--danger);
-    border-radius: 20px;
-    transition: all 0.2s ease;
+  .divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
   }
 
-  .status-badge.online {
-    background: var(--accent-muted);
-    color: var(--accent);
-  }
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-
-  .status-badge.online .status-dot {
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .header-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .meta-label {
-    font-size: 12px;
+  .subtitle {
+    font-size: 14px;
     color: var(--text-muted);
+    font-weight: 400;
   }
 
-  .meta-value {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    background: var(--bg-elevated);
-    border-radius: 6px;
-  }
-
-  /* Layout */
-  .layout {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr 400px;
-    gap: 20px;
-  }
-
-  .column-main {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .column-side {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  /* Card */
-  .card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .card-title {
+  .connection-pill {
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 8px 14px;
+    background: var(--danger-muted);
+    border: 1px solid var(--danger);
+    border-radius: 24px;
     font-size: 13px;
     font-weight: 500;
-    color: var(--text-primary);
-  }
-
-  .card-title svg {
-    color: var(--text-muted);
-  }
-
-  .card-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .hint {
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-
-  /* Camera */
-  .camera-card {
-    flex: 1;
-    min-height: 400px;
-  }
-
-  .camera-feed {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-primary);
-    position: relative;
-  }
-
-  .feed-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-
-  .feed-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    color: var(--text-muted);
-  }
-
-  .feed-placeholder span {
-    font-size: 14px;
-  }
-
-  .live-badge {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
     color: var(--danger);
-    padding: 4px 8px;
-    background: var(--danger-muted);
-    border-radius: 4px;
+    transition: all 0.2s;
   }
 
-  .live-dot {
-    width: 6px;
-    height: 6px;
-    background: var(--danger);
-    border-radius: 50%;
-    animation: pulse 1s ease-in-out infinite;
-  }
-
-  /* Controls */
-  .controls-card {
-    flex-shrink: 0;
-  }
-
-  .controls-content {
-    padding: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 32px;
-  }
-
-  .dpad {
-    display: grid;
-    grid-template-columns: 56px 56px 56px;
-    grid-template-rows: 56px 56px 56px;
-    gap: 4px;
-    position: relative;
-  }
-
-  .dpad-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .dpad-btn:hover {
-    background: var(--bg-primary);
-    border-color: var(--border-hover);
-    color: var(--text-primary);
-  }
-
-  .dpad-btn.active {
+  .connection-pill.online {
     background: var(--accent-muted);
     border-color: var(--accent);
     color: var(--accent);
   }
 
-  .dpad-btn .key {
-    font-size: 10px;
-    font-weight: 500;
-    opacity: 0.5;
+  .connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s ease-in-out infinite;
   }
 
-  .dpad-btn.up { grid-column: 2; grid-row: 1; }
-  .dpad-btn.left { grid-column: 1; grid-row: 2; }
-  .dpad-btn.down { grid-column: 2; grid-row: 3; }
-  .dpad-btn.right { grid-column: 3; grid-row: 2; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.9); }
+  }
 
-  .dpad-center {
+  /* Main Layout */
+  .main-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 0;
+  }
+
+  /* Video Section */
+  .video-section {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+  }
+
+  .video-player {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    position: relative;
+    min-height: 400px;
+  }
+
+  .video-player.fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    min-height: 100vh;
+  }
+
+  .video-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .video-feed {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .video-offline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-muted);
+  }
+
+  .offline-icon {
+    opacity: 0.3;
+  }
+
+  .offline-text {
+    font-size: 16px;
+    margin: 0;
+  }
+
+  .retry-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .retry-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-light);
+  }
+
+  /* Video Controls */
+  .video-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .controls-left, .controls-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--danger);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: white;
+  }
+
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .video-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: white;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .video-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+
+  /* Controls Panel */
+  .controls-panel {
+    padding: 32px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+  }
+
+  .section-label {
+    margin: 0 0 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 72px);
+    grid-template-rows: repeat(3, 72px);
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .dpad-key {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .dpad-key:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-light);
+    color: var(--text-primary);
+    transform: scale(1.02);
+  }
+
+  .dpad-key.active {
+    background: var(--accent-muted);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: scale(0.98);
+  }
+
+  .key-letter {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .dpad-key.up { grid-column: 2; grid-row: 1; }
+  .dpad-key.left { grid-column: 1; grid-row: 2; }
+  .dpad-key.right { grid-column: 3; grid-row: 2; }
+  .dpad-key.down { grid-column: 2; grid-row: 3; }
+
+  .dpad-center-wrapper {
     grid-column: 2;
     grid-row: 2;
-    background: var(--bg-card);
-    border-radius: 50%;
-    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  /* Buttons */
-  .btn-icon {
+  .stop-btn {
+    width: 100%;
+    height: 100%;
+    background: var(--danger-muted);
+    border: 2px solid var(--danger);
+    color: var(--danger);
+    border-radius: var(--radius);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .stop-btn:hover {
+    background: var(--danger);
+    color: white;
+    transform: scale(1.02);
+  }
+
+  .hint-text {
+    margin: 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    background: var(--bg-secondary);
+  }
+
+  /* Chat Section (Logs) */
+  .chat-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+  }
+
+  .chat-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .chat-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .viewer-count {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .icon-btn {
     width: 32px;
     height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: transparent;
-    border: 1px solid transparent;
+    border: none;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.15s;
   }
 
-  .btn-icon:hover {
-    background: var(--bg-elevated);
-    border-color: var(--border);
+  .icon-btn:hover {
+    background: var(--bg-hover);
     color: var(--text-primary);
   }
 
-  .btn-secondary {
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-primary);
-    border-color: var(--border-hover);
-  }
-
-  .btn-danger {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 24px;
-    font-size: 13px;
-    font-weight: 500;
-    background: var(--danger-muted);
-    border: 1px solid var(--danger);
-    color: var(--danger);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-danger:hover {
-    background: var(--danger);
-    color: white;
-  }
-
-  /* Logs */
-  .logs-card {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .log-count {
-    font-size: 11px;
-    font-weight: 500;
-    padding: 2px 8px;
-    background: var(--bg-elevated);
-    border-radius: 10px;
-    color: var(--text-muted);
-  }
-
-  .logs-feed {
+  .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    min-height: 200px;
-    max-height: 300px;
+    gap: 4px;
   }
 
-  .log-entry {
+  .chat-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--text-muted);
+  }
+
+  .chat-empty p {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .chat-empty span {
+    font-size: 12px;
+    opacity: 0.6;
+  }
+
+  .chat-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+  }
+
+  .chat-message:hover {
+    background: var(--bg-hover);
+  }
+
+  .msg-badge {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    font-size: 12px;
+    justify-content: center;
+    background: var(--info-muted);
+    color: var(--info);
     border-radius: 6px;
-    transition: background 0.1s ease;
   }
 
-  .log-entry:hover {
-    background: var(--bg-elevated);
-  }
-
-  .log-time {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-muted);
-    flex-shrink: 0;
-  }
-
-  .log-type-badge {
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 2px 6px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    background: var(--bg-elevated);
-    color: var(--text-muted);
-  }
-
-  .log-entry.success .log-type-badge {
+  .msg-badge.success {
     background: var(--accent-muted);
     color: var(--accent);
   }
 
-  .log-entry.error .log-type-badge {
+  .msg-badge.error {
     background: var(--danger-muted);
     color: var(--danger);
   }
 
-  .log-msg {
-    color: var(--text-secondary);
+  .msg-content {
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.4;
   }
 
-  .empty-state {
-    flex: 1;
+  .msg-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* Terminal Section */
+  .terminal-section {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+    height: 280px;
+  }
+
+  .terminal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .terminal-title {
     display: flex;
     align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
+    gap: 8px;
     font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
   }
 
-  /* Terminal */
-  .terminal-card {
-    flex: 1;
-    min-height: 0;
+  .terminal-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .terminal-status {
     font-size: 11px;
-    font-weight: 500;
     color: var(--danger);
+    font-weight: 500;
   }
 
   .terminal-status.connected {
     color: var(--accent);
   }
 
-  .terminal {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-primary);
-    font-family: var(--font-mono);
-    min-height: 200px;
-    max-height: 300px;
-  }
-
-  .terminal-output {
+  .terminal-body {
     flex: 1;
     overflow-y: auto;
     padding: 16px;
-    font-size: 12px;
+    background: var(--bg-primary);
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
     line-height: 1.6;
   }
 
   .terminal-welcome {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
     color: var(--text-muted);
   }
 
-  .welcome-title {
+  .terminal-welcome p {
+    margin: 0 0 4px;
     color: var(--text-secondary);
   }
 
-  .welcome-hint {
-    font-size: 11px;
+  .terminal-welcome span {
+    font-size: 12px;
     opacity: 0.6;
   }
 
-  .term-line {
-    margin-bottom: 4px;
+  .terminal-line {
+    margin-bottom: 6px;
   }
 
-  .term-line.cmd {
+  .terminal-line.command {
     display: flex;
     gap: 8px;
-    color: var(--accent);
   }
 
-  .term-line.out {
+  .prompt {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .cmd-text {
+    color: var(--text-primary);
+  }
+
+  .output-text {
     color: var(--text-secondary);
     padding-left: 16px;
     white-space: pre-wrap;
     word-break: break-all;
   }
 
-  .prompt {
-    color: var(--accent);
-    font-weight: 500;
-    flex-shrink: 0;
-  }
-
-  .terminal-input-wrapper {
+  .terminal-input-area {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 12px 16px;
+    background: var(--bg-tertiary);
     border-top: 1px solid var(--border);
-    background: var(--bg-card);
   }
 
-  .terminal-input {
+  .input-prompt {
+    color: var(--accent);
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .cmd-input {
     flex: 1;
     background: transparent;
     border: none;
     color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 13px;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 14px;
     outline: none;
   }
 
-  .terminal-input::placeholder {
+  .cmd-input::placeholder {
     color: var(--text-muted);
   }
 
-  .terminal-input:disabled {
-    opacity: 0.5;
+  .cmd-input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .send-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    border: none;
+    color: white;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .send-btn:hover:not(:disabled) {
+    background: #0ea271;
+    transform: scale(1.05);
+  }
+
+  .send-btn:disabled {
+    opacity: 0.3;
     cursor: not-allowed;
   }
 
   /* Responsive */
   @media (max-width: 1024px) {
-    .layout {
+    .main-layout {
       grid-template-columns: 1fr;
     }
 
-    .column-side {
+    .sidebar {
+      border-left: none;
+      border-top: 1px solid var(--border);
       flex-direction: row;
+      height: 350px;
     }
 
-    .logs-card,
-    .terminal-card {
+    .chat-section, .terminal-section {
       flex: 1;
+      height: auto;
+      border-top: none;
+    }
+
+    .terminal-section {
+      border-left: 1px solid var(--border);
     }
   }
 
   @media (max-width: 768px) {
-    .app {
-      padding: 12px;
-      gap: 12px;
-    }
-
     .header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
+      padding: 12px 16px;
     }
 
-    .column-side {
+    .sidebar {
       flex-direction: column;
+      height: auto;
     }
 
-    .controls-content {
-      flex-direction: column;
-      gap: 20px;
+    .chat-section {
+      max-height: 300px;
+    }
+
+    .terminal-section {
+      border-left: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .controls-panel {
+      padding: 24px 16px;
+    }
+
+    .dpad {
+      grid-template-columns: repeat(3, 64px);
+      grid-template-rows: repeat(3, 64px);
+      gap: 6px;
     }
   }
 </style>
